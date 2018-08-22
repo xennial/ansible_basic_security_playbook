@@ -1,0 +1,60 @@
+[sshd]
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+maxretry = 4
+bantime = 3600
+
+[sshd-ddos]
+enabled = true
+port    = ssh
+logpath = %(sshd_log)s
+
+[nginx-http-auth]
+
+enabled = true
+filter = nginx-http-auth-mod
+port    = http,https
+logpath = %(nginx_error_log)s
+
+# Added jail to defend against badbots 
+# https://www.digitalocean.com/community/tutorials/how-to-protect-an-nginx-server-with-fail2ban-on-ubuntu-14-04
+[nginx-badbots]
+
+enabled  = true
+port	 = http,https
+filter   = nginx-badbots
+logpath  = %(nginx_access_log)s
+maxretry = 3
+
+# Added jail to defend against clients using Nginx as an open proxy
+# https://www.digitalocean.com/community/tutorials/how-to-protect-an-nginx-server-with-fail2ban-on-ubuntu-14-04
+[nginx-noproxy]
+
+enabled	 = true
+port     = http,https
+filter   = nginx-noproxy
+logpath  = %(nginx_access_log)s
+maxretry = 2
+
+[nginx-nohome]
+
+enabled = true
+port    = http,https
+filter  = nginx-nohome
+logpath = %(nginx_access_log)s
+maxretry = 2
+
+# To use 'nginx-limit-req' jail you should have `ngx_http_limit_req_module` 
+# and define `limit_req` and `limit_req_zone` as described in nginx documentation
+# http://nginx.org/en/docs/http/ngx_http_limit_req_module.html
+# or for example see in 'config/filter.d/nginx-limit-req.conf'
+[nginx-limit-req]
+port    = http,https
+logpath = %(nginx_error_log)s
+
+[nginx-botsearch]
+
+port     = http,https
+logpath  = %(nginx_error_log)s
+maxretry = 2

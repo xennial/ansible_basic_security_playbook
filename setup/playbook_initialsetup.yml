@@ -1,0 +1,51 @@
+# Designed to be with ansible 2.5
+- hosts: all 
+  roles:
+    - userquestions
+  tags:
+    - userquestions  
+
+- hosts: all
+  roles:
+    - common
+  tags:
+    - common
+    
+- hosts: all
+  roles:
+    - webserver
+  tags:
+    - webserver
+
+- hosts: all 
+  roles:
+    - email
+  tags:
+    - email
+
+- hosts: all
+  roles:
+    - fail2ban
+  tags:
+    - fail2ban
+
+- hosts: all
+  roles:
+    - antivirus
+  tags:
+    - antivirus
+
+- hosts: all
+  roles:
+    - rkhunter
+  tags:
+    - rkhunter
+    
+# Tripwire should be the very last entry  (as it has to save changes to all system config files)
+- hosts: all
+  roles:
+    - tripwire
+  tags:
+    - tripwire
+    
+

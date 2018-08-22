@@ -1,0 +1,190 @@
+# This is needed so tripwire and rkhunter can send email notifications if it detects any 
+#changes on the system, this might need futher configuration with domain names
+- name: Install mailutils
+  apt: 
+    name: mailutils
+    state: latest
+
+# # Ask user to state hostname as it might be different from one in /etc/hostname
+- name: Ask for hostname
+  pause:
+    prompt: What hostname would you like to use with mail (e.g. example.com)?
+    echo: yes
+  register: user_selected_hostname
+
+- name: Reset server hostname to match the one given (necessary for email to work correctly)
+  shell: hostname "{{ user_selected_hostname.user_input }}"
+
+- name: Update /etc/hostname file
+  template: src=etc/hostname dest=/etc/hostname
+
+- name: Create /etc/mailname file with new hostname
+  template: src=postfix/mailname dest=/etc/mailname
+
+- name: Copy config file from template
+  template: src=postfix/main.cf dest=/etc/postfix/main.cf
+
+- name: Ask user if they want root@ email forwarded to another address
+  pause:
+    prompt: Would you like email to root@ forwarded to your personal address(yes/no)?
+    echo: yes 
+  register: forward_email
+
+# - name: Ask for email address to forward root mail on to
+#   pause:
+#     prompt: What email address would you like your root email forwarded to?
+#     echo: yes
+#   register: your_email_address
+#   when: forward_email.user_input == "yes" 
+
+- name: Create aliases file if it is not already present
+  file:
+    dest: /etc/aliases
+
+- name: Forward System email to personal address
+  lineinfile:
+    insertafter: EOF 
+    line: 'root:          "{{ useremail.user_input }}" '
+    path: /etc/aliases
+    state: present
+  when: forward_email.user_input == "yes" 
+
+- name: Apply change to /etc/aliases
+  shell: newaliases
+
+- name: Ask user if they want a send only mail server
+  pause:
+    prompt: Should this be a send only mail server (please answer yes/no)?
+    echo: yes
+  register: send_only_mail_answer
+
+- name: Set inet_interfaces to loopback only in config 
+  replace:
+    dest: /etc/postfix/main.cf
+    regexp: '^inet_interfaces(\s+)=(\s+)all'
+    replace: 'inet_interfaces = loopback-only'
+  when: send_only_mail_answer.user_input == "yes"
+
+- name: Restart postfix (this needs to happen everytime postfix conf file is changed)
+  service: 
+    name: postfix
+    state: restarted
+
+#
+## POSTFIX HARDENING
+# This follows the advice recommended in this guide
+# https://security-24-7.com/hardening-guide-for-postfix-2-x/
+
+  
+# - name: Reject the request when Postfix is not final destination for the recipient domain
+#   replace: 
+#     dest: /etc/postfix/main.cf
+#     regexp: '^defer_unauth_destination'
+#     replace: 'reject_unauth_destination'
+# 
+# - name: Limit Denial of Service Attacks
+#   blockinfile:
+#     dest: /etc/postfix/main.cf
+#     state: present
+#     insertafter: EOF 
+#     block: |
+#       default_process_limit = 100
+#       smtpd_client_connection_count_limit = 10
+#       smtpd_client_connection_rate_limit = 30
+#       queue_minfree = 20971520
+#       header_size_limit = 51200
+#       message_size_limit = 10485760
+#       smtpd_recipient_limit = 100
+# 
+# - name: Restart postfix (this needs to happen everytime postfix conf file is changed)
+#   service: 
+#     name: postfix
+#     state: restarted
+  
+
+# #
+# # # DKIM TOOLS
+# #
+
+- name: Install opendkim
+  apt:
+    name: opendkim
+    state: latest
+
+- name: Install opendkim-tools 
+  apt:
+    name: opendkim-tools 
+    state: latest
+
+# Based on the tutorial seen here:https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-dkim-with-postfix-on-debian-wheezy    
+- name: Edit opendkim config file add lines from template to end of file 
+  blockinfile:
+    block: "{{ lookup('file', 'opendkimconf_additions') }}"
+    dest: /etc/opendkim.conf
+    insertafter: EOF
+    state: present
+
+- name: Connect the milter to Postfix 
+  lineinfile:
+    insertafter: EOF 
+    line: 'SOCKET="inet:12301@localhost" '
+    path: /etc/default/opendkim
+    state: present
+
+- name: Create a directory structure that will hold the trusted hosts, key tables, signing tables and crypto keys
+  file: 
+    path: "{{ item }}"
+    state: directory
+  with_items: ["/etc/opendkim","/etc/opendkim/keys"]
+
+- name: Create opendkim trusted hosts file 
+  template: src=opendkim/Trustedhosts dest=/etc/opendkim/TrustedHosts
+
+- name: Create KeyTable file 
+  template: src=opendkim/KeyTable dest=/etc/opendkim/KeyTable
+
+- name: Create SigningTable 
+  template: src=opendkim/SigningTable dest=/etc/opendkim/SigningTable
+
+- name: Make folder to hold dkim keys
+  file:
+    state: directory
+    path: /etc/opendkim/keys/{{ user_selected_hostname.user_input }}
+
+- name: Check for the existence of previously generated keys (we do not want to overwrite the existing ones)
+  stat:
+    path: /etc/opendkim/keys/{{ user_selected_hostname.user_input }}/mail.private
+  register: dkim_keys
+
+- name: Generate the dkim keys if none exist
+  shell: opendkim-genkey -D /etc/opendkim/keys/{{ user_selected_hostname.user_input }} -s mail -d "{{ user_selected_hostname.user_input }}"
+  when: dkim_keys.stat.exists == False
+
+- name: Change the owner of the private key to opendkim
+  file:
+    path: /etc/opendkim/keys/{{ user_selected_hostname.user_input }}/mail.private
+    owner: opendkim
+    group: opendkim
+
+- name: Add block to postfix config file so DKIM will work with postfix
+  blockinfile:
+    block: |
+        # Following lines are needed for opendkim config
+        milter_protocol = 2
+        milter_default_action = accept
+        smtpd_milters = inet:localhost:12301
+        non_smtpd_milters = inet:localhost:12301
+    dest: /etc/postfix/main.cf
+    insertafter: EOF
+    state: present
+
+- name: Restart Postfix
+  service:
+    name: postfix 
+    state: restarted
+
+- name: Restart opendkim
+  service:
+    name: opendkim
+    state: restarted
+

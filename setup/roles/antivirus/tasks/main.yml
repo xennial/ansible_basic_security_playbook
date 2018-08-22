@@ -1,0 +1,81 @@
+# Install Maldet
+# Follows the advice laid out on https://www.itzgeek.com/how-tos/linux/debian/install-linux-malware-detect-on-debian-ubuntu-linuxmint-a-malware-scanner-for-linux-operating-system.html
+
+- name: Download the latest version of Maldet
+  get_url: 
+    url: http://www.rfxn.com/downloads/maldetect-current.tar.gz
+    dest: /tmp
+- name: Create a /tmp/maldet directory
+  file:
+    path: /tmp/maldetect-current
+    state: directory 
+
+- name: Unpack maldet tar ball
+  shell:  tar -xf /tmp/maldetect-current.tar.gz --directory /tmp/maldetect-current
+
+- name: Get name of tar archive
+  shell: ls /tmp/maldetect-current
+  register: maldet_directory
+
+- name: Run Maldet installation script
+  shell: cd /tmp/maldetect-current/{{ maldet_directory.stdout }} ; bash ./install.sh
+
+# - name: Ask user which email they would like to use with Maldet 
+#   pause:
+#     prompt: Please enter the email you would like to use for Maldet updates
+#     echo: yes
+#   register: user_email_for_maldet
+
+- name: Set up alert email address for maldet scans 
+  replace:
+    dest: /usr/local/maldetect/conf.maldet 
+    regexp: 'you@domain.com'
+    replace: "{{ useremail.user_input }}"
+
+- name: Update Maldet as part as Cron Job
+  cron:
+    name: "Check everynight for Maldet updates and install them"
+    hour: "2"
+    minute: "0"
+    job: "maldet -d && maldet -u"
+
+- name: Scan for viruses once a day
+  cron:
+    name: Maldet daily virus scan of entire home directory 
+    hour: "3"
+    minute: "0"
+    job: "maldet -b -a /home"
+
+# # Install ClamAV  
+
+- name: Install ClamAV
+  apt:
+    name: clamav
+    state: latest
+
+- name: Install ClamAV
+  apt:
+    name: clamav-daemon
+    state: latest
+
+- name: Install Clamscan
+  apt:
+    name: clamdscan
+    state: latest
+
+# Unconventionally ClamAV has outputs a return code of 1 after completing a successful update
+# of the database. Ansible does not like non zero return codes and will error
+# the following is a workaround for this
+# https://github.com/clamwin/clamav-win32/issues/4
+# This link discusses the suggested fix in more detail https://github.com/ansible/ansible/issues/13223
+- name: Update virus database
+  shell: service clamav-freshclam stop && freshclam --quiet
+  failed_when: virus_database_updated.rc != 1
+  register: virus_database_updated
+
+
+  
+
+
+  
+  

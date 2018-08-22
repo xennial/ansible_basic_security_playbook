@@ -1,0 +1,53 @@
+# This role relys on having nginx already installed
+    
+# Install fail2ban
+- name: Install fail2fail
+  apt:
+    name: fail2ban
+    state: latest
+
+# Check if Fail2Ban jail.local file exists
+- name: Add jail.local file
+  stat: path=/etc/fail2ban/jail.local
+  register: jaillocalst
+
+- name: Inform sysadmin if a jail file already exists
+  pause: 
+    prompt: "A jail.local file already exists, do want to overwrite it? (enter y/n)"
+    echo: yes
+  register: f2boverwrite
+  when: jaillocalst.stat.exists == True
+  
+- debug: 
+    msg: "Exiting play as you do not wish to overwrite files"
+  when: f2boverwrite is defined and f2boverwrite.user_input is defined and f2boverwrite.user_input == "n"  
+  
+- name: If sysadmin chooses not to continue exit play gracefully
+  meta: end_play
+  when: f2boverwrite is defined and f2boverwrite.user_input is defined and f2boverwrite.user_input == "n" 
+
+# Add new jail.local file if none exists
+- name: Add jail.local
+  template: src=jail.local dest=/etc/fail2ban/jail.local
+  when: jaillocalst.stat.exists == False or (f2boverwrite.user_input == "y" and f2boverwrite is defined)
+
+# Add necessary files to filter.d folder
+- name: Add nginx-http-auth-mod.conf
+  template: src=nginx-http-auth-mod.conf dest=/etc/fail2ban/filter.d/nginx-http-auth-mod.conf
+    
+- name: Add nginx-nohome.conf
+  template: src=nginx-nohome.conf dest=/etc/fail2ban/filter.d/nginx-nohome.conf
+    
+- name: Add nginx-noproxy.conf
+  template: src=nginx-noproxy.conf dest=/etc/fail2ban/filter.d/nginx-noproxy.conf
+  
+- name: Add nginx-badbots.conf
+  template: src=nginx-badbots.conf dest=/etc/fail2ban/filter.d/nginx-badbots.conf
+
+- name:  Reload Fail2Ban to apply changes to settings
+  shell: fail2ban-client reload
+  register: fail2ban_reload_status
+  
+- name: If fail2ban fails to reload inform user
+  debug: msg="Fail2ban failed to reload automatically, it gave the following error {{ fail2ban_reload_status.stdout }}. Please reload it manually by running  sudo fail2ban-client status"
+  when: fail2ban_reload_status.stderr == True

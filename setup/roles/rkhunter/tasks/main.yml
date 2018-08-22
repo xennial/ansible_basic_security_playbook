@@ -1,0 +1,56 @@
+- name: Install rkhunter
+  apt:
+    name: rkhunter
+    state: latest
+
+# - name: Get user email to use for rookit notifications
+#   pause: 
+#     prompt: Please enter the email address that you would like rootkit hunter to use to alert you to any change
+#     echo: yes
+#   register: rkhunter_user_email
+         
+- name: Copy across rkhunter.conf file from templates (contains fixes that allows RK hunter to work correctly with Ubuntu)
+  template: src=rkhunter.conf dest=/etc/rkhunter.conf
+
+# Uncomment this if you wish to apply the fixes inline instead of copying over entirely new conf file
+# Also comment about the task above  
+# Fix for RK Hunter listed here: https://churchill.ddns.me.uk/post/rkhunter-invalid-web-cmd-configuration-option/
+# - name: Apply fixes to RK hunter so that it works properly with Ubuntu
+#   shell: sed -i 's#WEB_CMD=\"\/bin\/false\"#WEB_CMD=\"\"#g' /etc/rkhunter.conf &&
+#          sed -i 's/UPDATE_MIRRORS=0/UPDATE_MIRRORS=1/g' /etc/rkhunter.conf &&
+#          sed -i 's/MIRRORS_MODE=1/MIRRORS_MODE=0/g' /etc/rkhunter.conf
+
+- name: Refresh Rkhunter database
+  shell: rkhunter --update --quiet
+
+- name: Allow root login on server?
+  pause: 
+    prompt: Do you want to allow users to login as root on your server (yes/no)? (Answering yes will update the RKHunter configuration, but root logins will have to be disabled manually)
+    echo: yes
+  register: allow_root_login
+
+- name: Update rkhunter.conf
+  shell: sed -i 's/#ALLOW_SSH_ROOT_USER=no/ALLOW_SSH_ROOT_USER=yes/g' /etc/rkhunter.conf
+  when: allow_root_login.user_input == "yes" and allow_root_login is defined
+
+- name: Update rkhunter file properties (this needs to be run after any change to /etc/rkhunter.conf)
+  shell: rkhunter --propupd
+
+- name: Add mail cron job for rkhunter
+  cron: 
+    name: Rkhunter check and notify user of system status 
+    minute: "10"
+    hour: "2"
+    job: /usr/bin/rkhunter --cronjob --update --quiet  
+
+# Advice from https://www.digitalocean.com/community/tutorials/how-to-use-rkhunter-to-guard-against-rootkits-on-an-ubuntu-vps
+# It is recommended that after you make changes, at least run sudo rkhunter --propupd 
+# to update rkhunter to the new file properties.
+#
+# Because this software references known-good values and system states that you have allowed, 
+# it is best to install and configure this directly after you have configured most of the software 
+#for your installation. Doing so before configuring your software will result in a lot of false positives, 
+# while waiting too long can result in intrusion and not knowing if you are whitelisting bad files.
+
+
+  

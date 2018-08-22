@@ -1,0 +1,152 @@
+# This role works with debian version 2.4 and Ubuntu 16 and above
+
+# Install Tripwire version 2.4
+- name: Install Tripwire 
+  apt: 
+    name: tripwire=2.4*
+    state: present
+
+- name: Get hostname of remote host
+  shell: cat /etc/hostname
+  register: hostname_on_remote_system
+
+- name: Set tripwire local passphrase
+  pause:
+    prompt: "Enter the local passphrase you would like to use with tripwire"
+    echo: no
+  register: tripwire_local_passphrase
+
+- name: Set tripwire site passphrase
+  pause:
+    prompt: "Enter the site passphrase you would like to use with tripwire"
+    echo: no
+  register: tripwire_site_passphrase
+
+- name: Find any key files that may have been created automatically during installation
+  find:
+    paths: /etc/tripwire
+    patterns: '*.key,*.key.*'
+  register: old_key_files_to_delete
+
+- name: Remove any key files that may have been created automatically during installation (we are going to generate some new ones)
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ old_key_files_to_delete.files }}"
+
+- name: Create local key file
+  expect:
+    command: twadmin --generate-keys -L /etc/tripwire/{{ hostname_on_remote_system.stdout }}-local.key
+    responses:
+      Enter the local keyfile passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
+      Verify the local keyfile passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
+
+- name: Create site key file
+  expect:
+    command: twadmin --generate-keys -S /etc/tripwire/site.key
+    responses:
+      Enter the site keyfile passphrase*.: "{{ tripwire_site_passphrase.user_input }}"
+      Verify the site keyfile passphrase*.: "{{ tripwire_site_passphrase.user_input }}"
+
+- name: Create new tripwire config file
+  expect:
+    command: twadmin --create-cfgfile -S /etc/tripwire/site.key /etc/tripwire/twcfg.txt 
+    responses:
+      enter your site passphrase*.: "{{ tripwire_site_passphrase.user_input }}"
+
+- name: Copy over default Debian policy file template
+  template: src=twpol.txt dest=/etc/tripwire/twpol.txt
+
+- name: Create new policy file
+  expect:
+    command: twadmin --create-polfile -S /etc/tripwire/site.key /etc/tripwire/twpol.txt 
+    responses:
+      enter your site passphrase*.: "{{ tripwire_site_passphrase.user_input }}"
+
+- name: Initialise tripwire database 
+  expect: 
+    command: tripwire --init
+    responses:
+      enter your local passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
+
+- name: Make a list of all files that we do not need to monitor or ones that produce false positives
+  shell: sudo sh -c 'tripwire --check | grep Filename > /etc/tripwire/test_results'
+
+- name: Copy over script that automatically comments out false positives
+  template: src=comment_out_false_positives.sh dest=/etc/tripwire/comment_out_false_positives.sh
+
+- name: Run afore mentioned script
+  command: bash /etc/tripwire/comment_out_false_positives.sh /etc/tripwire/test_results
+
+- name: Clean up - Delete comment_out_false_positives script and test_results files
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items: 
+    - /etc/tripwire/comment_out_false_positives.sh
+    - /etc/tripwire/test_results
+
+- name: Recreate encrypted tripwire policy which includes our changes 
+  expect:
+    command: twadmin --create-polfile -S /etc/tripwire/site.key /etc/tripwire/twpol.txt 
+    responses:
+      enter your site passphrase*.: "{{ tripwire_site_passphrase.user_input }}"
+
+- name: Reinitialise tripwire database so our changes take effect
+  expect: 
+    command: tripwire --init
+    responses:
+      enter your local passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
+
+- name: Delete plain text configuration files and backups
+  file:
+    state: absent
+    path: "{{ item }}"
+  with_items: 
+    - /etc/tripwire/twpol.txt
+    - /etc/tripwire/twpol.bak
+    - /etc/tripwire/twcfg.txt
+    - /etc/tripwire/tw.cfg.bak
+
+# Tripwire needs to be updated each time a new package is installed otherwise 
+# it will report false errors. The next three commands update the tripwire database 
+# to match the current configuration of the system 
+
+- name: Generate new Tripwire report
+  shell: tripwire --check
+  ignore_errors: true # Ignoring errors as this command prints output to screen which ansible will cause ansible to fail otherwise
+
+- name: Get all tripwire report files generated within the last hour
+  find:
+    age: -1h
+    patterns: '*.twr' 
+    paths: /var/lib/tripwire/report
+  register: recent_tripwire_report_files
+
+- name: Get newest report file from list 
+  set_fact:
+    newest_report_file: "{{ recent_tripwire_report_files.files | sort(attribute='mtime',reverse=true) | first }}"
+
+# Update tripwire database using most recently generated tripwire report file
+# so that new mailutils files are added to list to ignore
+- name: Update tripwire database sliently without prompt (accept all)
+  expect: 
+    command: tripwire --update --accept-all --twrfile "{{ newest_report_file.path }}"
+    responses:
+      enter your local passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
+
+# - name: Get email address that Tripwire cron will use 
+#   pause:
+#     prompt: "Please enter the email address that you would like Tripwire to use to alert you to any changes"
+#     echo: yes
+#   register: your_email
+
+- name: Set up nightly cron  so tripwire checks for changes reguarly. Runs every night at 2.00am
+  cron:
+    name: Tripwire check for changes to system files 
+    minute: "0"
+    hour: "2"
+    job: /usr/sbin/tripwire --check | mail -s "Tripwire report for `uname -n`" {{ useremail.user_input }}
+
+
+# role leaves ansible files.... do something about this??

@@ -1,0 +1,1 @@
+mail._domainkey.{{ user_selected_hostname.user_input }} {{ user_selected_hostname.user_input }}:mail:/etc/opendkim/keys/{{ user_selected_hostname.user_input }}/mail.private

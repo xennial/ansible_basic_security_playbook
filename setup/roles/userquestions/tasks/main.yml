@@ -1,0 +1,5 @@
+- name: Get user email
+  pause:
+    prompt: What email address would you like Tripwire, Rkhunter, and Maldet to use to inform you of any problems?
+    echo: yes
+  register: useremail

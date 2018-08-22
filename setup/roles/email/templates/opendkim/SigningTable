@@ -1,0 +1,1 @@
+*@{{ user_selected_hostname.user_input }} mail._domainkey.{{ user_selected_hostname.user_input }}
