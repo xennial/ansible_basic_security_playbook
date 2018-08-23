@@ -135,18 +135,9 @@
     responses:
       enter your local passphrase*.: "{{ tripwire_local_passphrase.user_input }}"
 
-# - name: Get email address that Tripwire cron will use 
-#   pause:
-#     prompt: "Please enter the email address that you would like Tripwire to use to alert you to any changes"
-#     echo: yes
-#   register: your_email
-
 - name: Set up nightly cron  so tripwire checks for changes reguarly. Runs every night at 2.00am
   cron:
     name: Tripwire check for changes to system files 
     minute: "0"
     hour: "2"
     job: /usr/sbin/tripwire --check | mail -s "Tripwire report for `uname -n`" {{ useremail.user_input }}
-
-
-# role leaves ansible files.... do something about this??

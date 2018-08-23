@@ -20,12 +20,6 @@
 - name: Run Maldet installation script
   shell: cd /tmp/maldetect-current/{{ maldet_directory.stdout }} ; bash ./install.sh
 
-# - name: Ask user which email they would like to use with Maldet 
-#   pause:
-#     prompt: Please enter the email you would like to use for Maldet updates
-#     echo: yes
-#   register: user_email_for_maldet
-
 - name: Set up alert email address for maldet scans 
   replace:
     dest: /usr/local/maldetect/conf.maldet 

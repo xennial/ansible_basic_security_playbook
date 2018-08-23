@@ -30,13 +30,6 @@
     echo: yes 
   register: forward_email
 
-# - name: Ask for email address to forward root mail on to
-#   pause:
-#     prompt: What email address would you like your root email forwarded to?
-#     echo: yes
-#   register: your_email_address
-#   when: forward_email.user_input == "yes" 
-
 - name: Create aliases file if it is not already present
   file:
     dest: /etc/aliases

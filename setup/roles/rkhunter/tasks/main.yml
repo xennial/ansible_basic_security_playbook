@@ -2,12 +2,6 @@
   apt:
     name: rkhunter
     state: latest
-
-# - name: Get user email to use for rookit notifications
-#   pause: 
-#     prompt: Please enter the email address that you would like rootkit hunter to use to alert you to any change
-#     echo: yes
-#   register: rkhunter_user_email
          
 - name: Copy across rkhunter.conf file from templates (contains fixes that allows RK hunter to work correctly with Ubuntu)
   template: src=rkhunter.conf dest=/etc/rkhunter.conf
@@ -49,7 +43,7 @@
 #
 # Because this software references known-good values and system states that you have allowed, 
 # it is best to install and configure this directly after you have configured most of the software 
-#for your installation. Doing so before configuring your software will result in a lot of false positives, 
+# for your installation. Doing so before configuring your software will result in a lot of false positives, 
 # while waiting too long can result in intrusion and not knowing if you are whitelisting bad files.
 
 
