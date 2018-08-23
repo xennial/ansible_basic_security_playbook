@@ -24,3 +24,7 @@ cat /etc/opendkim/keys/name_of_your_domain/mail.txt
 **
 More indepth instructions can be found in this excellent tutorial (roughly halfway down the page): 
 https://www.digitalocean.com/community/tutorials/how-to-install-and-configure-dkim-with-postfix-on-debian-wheezy
+
+#### Example of how to execute Playbook
+Run the following from inside the /setup directory
+`ansible-playbook -i hosts -l "yourserver" playbook_initialsetup.yml -u root --private-key ~/.ssh/yourkey`
