@@ -69,39 +69,7 @@
   service: 
     name: postfix
     state: restarted
-
-#
-## POSTFIX HARDENING
-# This follows the advice recommended in this guide
-# https://security-24-7.com/hardening-guide-for-postfix-2-x/
-
   
-# - name: Reject the request when Postfix is not final destination for the recipient domain
-#   replace: 
-#     dest: /etc/postfix/main.cf
-#     regexp: '^defer_unauth_destination'
-#     replace: 'reject_unauth_destination'
-# 
-# - name: Limit Denial of Service Attacks
-#   blockinfile:
-#     dest: /etc/postfix/main.cf
-#     state: present
-#     insertafter: EOF 
-#     block: |
-#       default_process_limit = 100
-#       smtpd_client_connection_count_limit = 10
-#       smtpd_client_connection_rate_limit = 30
-#       queue_minfree = 20971520
-#       header_size_limit = 51200
-#       message_size_limit = 10485760
-#       smtpd_recipient_limit = 100
-# 
-# - name: Restart postfix (this needs to happen everytime postfix conf file is changed)
-#   service: 
-#     name: postfix
-#     state: restarted
-  
-
 # #
 # # # DKIM TOOLS
 # #
