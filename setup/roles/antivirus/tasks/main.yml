@@ -64,7 +64,7 @@
 # This link discusses the suggested fix in more detail https://github.com/ansible/ansible/issues/13223
 - name: Update virus database
   shell: service clamav-freshclam stop && freshclam --quiet
-  failed_when: virus_database_updated.rc != 1
+  failed_when: ( virus_database_updated.rc not in [ 0, 1 ] )
   register: virus_database_updated
 
 

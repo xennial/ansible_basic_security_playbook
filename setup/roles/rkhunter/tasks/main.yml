@@ -16,6 +16,8 @@
 
 - name: Refresh Rkhunter database
   shell: rkhunter --update --quiet
+  failed_when: (rkhunter_update.rc not in [ 0, 2 ])
+  register: rkhunter_update
 
 - name: Allow root login on server?
   pause: 
